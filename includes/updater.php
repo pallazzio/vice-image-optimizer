@@ -1,210 +1,146 @@
 <?php
 
-class PallazzioUpdater {
-	private $slug;
-	private $plugin_data;
-	private $username;
-	private $repo;
-	private $plugin_file;
-	private $github_api_result;
-	private $access_token;
-	private $plugin_activated;
+if ( ! defined( 'WPINC' ) ) die;
+
+if ( ! class_exists( 'Pallazzio_WordPress_GitHub_Updater' ) ) :
+
+class Pallazzio_WordPress_GitHub_Updater {
+	private $plugin          = null; // e.g. 'plugin-folder/plugin-file.php'
+	private $plugin_file     = null; // e.g. '/home/user/public_html/wp-content/plugins/plugin-folder/plugin-file.php'
+	private $github_user     = null; // e.g. 'pallazzio'
+	private $github_repo     = null; // e.g. 'plugin-folder'
+	private $github_response = null; // array - info about new version from github
+	private $access_token    = null; // string - optional - for private github repo
+	private $plugin_data     = null; // array - info about currently installed version
+	private $plugin_active   = null; // bool
 
 	/**
 	 * Class constructor.
 	 *
-	 * @param  string $plugin_file
-	 * @param  string $github_username
-	 * @param  string $github_project_name
-	 * @param  string $access_token
-	 * @return null
 	 */
-	function __construct( $plugin_file, $github_username, $github_project_name, $access_token = '' ) {
-		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'pu_set_transient' ) );
-		add_filter( 'plugins_api', array( $this, 'pu_set_plugin_info' ), 10, 3 );
-		add_filter( 'upgrader_pre_install', array( $this, 'pu_pre_install' ), 10, 3 );
-		add_filter( 'upgrader_post_install', array( $this, 'pu_post_install' ), 10, 3 );
+	function __construct( $plugin_file = null, $github_user = null, $access_token = null ) {
+		$plugin_file_r = explode( '/', $plugin_file );
 
 		$this->plugin_file  = $plugin_file;
-		$this->username     = $github_username;
-		$this->repo         = $github_project_name;
+		$this->github_user  = $github_user;
+		$this->github_repo  = $plugin_file_r[ count( $plugin_file_r ) - 2 ];
 		$this->access_token = $access_token;
+		$this->plugin       = $this->github_repo . '/' . end( $plugin_file_r );
+
+		add_filter( 'plugins_api',                           array( $this, 'admin_area_show_plugin_info' ), 10, 3 );
+		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'modify_transient' ),            10, 1 );
+		add_filter( 'upgrader_pre_install',                  array( $this, 'pre_install'  ),                10, 3 );
+		add_filter( 'upgrader_post_install',                 array( $this, 'post_install' ),                10, 3 );
 	}
 
-	/**
-	 * Get information regarding our plugin from WordPress.
-	 *
-	 * @return null
-	 */
-	private function pu_init_plugin_data() {
-		$this->slug = plugin_basename( $this->plugin_file );
-		$this->plugin_data = get_plugin_data( $this->plugin_file );
+	private function init_plugin_data() {
+		return get_plugin_data( $this->plugin_file );
 	}
 
-	/**
-	 * Get information regarding our plugin from GitHub.
-	 *
-	 * @return null
-	 */
-	private function pu_get_repo_release_info() {
-		if ( ! empty( $this->github_api_result ) ) return;
+	private function github_api_fetch( $github_user, $github_repo, $access_token = null ) {
+		$url = 'https://api.github.com/repos/' . $github_user . '/' . $github_repo . '/releases';
 
-		// Query the GitHub API.
-		$url = 'https://api.github.com/repos/' . $this->username . '/' . $this->repo . '/releases';
-
-		if ( ! empty( $this->access_token ) ) {
-			$url = add_query_arg( array( 'access_token' => $this->access_token ), $url );
+		if ( ! empty( $access_token ) ) {
+			$url = add_query_arg( array( 'access_token' => $access_token ), $url );
 		}
 
-		// Get the results.
-		$this->github_api_result = wp_remote_retrieve_body( wp_remote_get( $url ) );
+		$github_response = wp_remote_retrieve_body( wp_remote_get( $url ) );
 
-		if ( ! empty( $this->github_api_result ) ) {
-			$this->github_api_result = @json_decode( $this->github_api_result );
+		// TODO: check to make sure the response isn't just a message saying that the request limit has been exceeded.
+
+		if ( ! empty( $github_response ) ) {
+			$github_response = @json_decode( $github_response );
 		}
 
-		// Use only the latest release.
-		if ( is_array( $this->github_api_result ) ) {
-			$this->github_api_result = $this->github_api_result[ 0 ];
+		if ( is_array( $github_response ) ) {
+			$github_response = $github_response[ 0 ];
 		}
+
+		$matches = null;
+		preg_match( '/tested:\s([\d\.]+)/i', $github_response->body, $matches );
+		if ( ! empty( $matches ) && is_array( $matches ) && count( $matches ) > 1 ) {
+			$github_response->tested = $matches[ 1 ];
+		}
+
+		return $github_response;
 	}
 
-	/**
-	 * Push in plugin version information to get the update notification.
-	 *
-	 * @param  object $transient
-	 * @return object
-	 */
-	public function pu_set_transient( $transient ) {
-		//if ( empty( $transient->response ) ) return $transient; // This breaks compatibility with "Companion Auto Update"
+	public function admin_area_show_plugin_info( $result, $action = null, $args = null ) {
+		return $result;
+	}
 
-		$this->pu_init_plugin_data();
-		$this->pu_get_repo_release_info();
+	public function modify_transient( $transient ) {
+		if ( isset( $transient->response[ $this->plugin ] ) ) return $transient;
 
-		$do_update = version_compare( $this->github_api_result->tag_name, $transient->checked[ $this->slug ] );
+		$last_github_call_time = get_option( $this->github_repo . '_Pallazzio_WordPress_GitHub_Updater_Time' );
+		if ( $last_github_call_time && time() - $last_github_call_time < 60 * 60 * 6 ) { //Don't call github more than once every six hours.
+			if ( ! empty( get_option( $this->github_repo . '_Pallazzio_WordPress_GitHub_Updater' ) ) ) {
+				$transient->response[ $this->plugin ] = json_decode( get_option( $this->github_repo . '_Pallazzio_WordPress_GitHub_Updater' ) );
+			} else {
+				unset( $transient->response[ $this->plugin ] );
+			}
+		} else {
+			$this->plugin_data     = $this->init_plugin_data();
+			$this->github_response = ! empty( $this->github_response ) ? $this->github_api_fetch( $this->github_user, $this->github_repo, $this->access_token ) : null;
 
-		if ( $do_update ) {
-			$package = $this->github_api_result->zipball_url;
-			if ( ! empty( $this->access_token ) ) {
-				$package = add_query_arg( array( 'access_token' => $this->access_token ), $package );
+			update_option( $this->github_repo . '_Pallazzio_WordPress_GitHub_Updater_Time', time() );
+
+			if ( ! version_compare( $this->github_response->tag_name, $this->plugin_data[ 'Version' ] ) ) {
+				update_option( $this->github_repo . '_Pallazzio_WordPress_GitHub_Updater', '' );
+				return $transient;
 			}
 
-			$obj = new stdClass();
-			$obj->slug        = $this->repo;
-			$obj->plugin      = $this->slug;
-			$obj->new_version = $this->github_api_result->tag_name;
+			$obj              = new stdClass();
+			$obj->slug        = $this->github_repo;
+			$obj->plugin      = $this->plugin;
 			$obj->url         = $this->plugin_data[ 'PluginURI' ];
-			$obj->package     = $package;
+			$obj->new_version = $this->github_response->tag_name;
+			$obj->package     = $this->github_response->zipball_url;
 
-			// Get the tested version of WP if available.
-			$matches = null;
-			preg_match( '/tested:\s([\d\.]+)/i', $this->github_api_result->body, $matches );
-			if ( ! empty( $matches ) ) {
-				if ( is_array( $matches ) ) {
-					if ( count( $matches ) > 1 ) {
-						$obj->tested = $matches[ 1 ];
-					}
-				}
+			if ( isset( $this->github_response->tested ) ) {
+				$obj->tested  = $this->github_response->tested;
 			}
 
-			$transient->response[ $this->slug ] = $obj;
+			$transient->response[ $this->plugin ] = $obj;
+
+			update_option( $this->github_repo . '_Pallazzio_WordPress_GitHub_Updater', wp_json_encode( $transient->response[ $this->plugin ] ) );
 		}
 
 		return $transient;
 	}
 
-	/**
-	 * Push in plugin version information to display in the details lightbox.
-	 *
-	 * @param  boolean $false
-	 * @param  string  $action
-	 * @param  object  $response
-	 * @return object
-	 */
-	public function pu_set_plugin_info( $false, $action, $response ) {
-		$this->pu_init_plugin_data();
-		$this->pu_get_repo_release_info();
-
-		if ( empty( $response->slug ) || $response->slug != $this->slug ) return $false;
-
-		$response->last_updated = $this->github_api_result->published_at;
-		$response->slug         = $this->slug;
-		$response->plugin_name  = $this->plugin_data[ 'Name' ];
-		$response->version      = $this->github_api_result->tag_name;
-		$response->author       = $this->plugin_data[ 'AuthorName' ];
-		$response->homepage     = $this->plugin_data[ 'PluginURI' ];
-
-		$download_link = $this->github_api_result->zipball_url;
-		if ( ! empty( $this->access_token ) ) {
-			$download_link = add_query_arg( array( 'access_token' => $this->access_token ), $download_link );
-		}
-		$response->download_link = $download_link;
-
-		// Load Parsedown.
-		require_once 'Parsedown.php';
-
-		// Create tabs in the lightbox.
-		$response->sections = array(
-			'Description' => $this->plugin_data[ 'Description' ],
-			'changelog'   => class_exists( 'Parsedown' ) ? Parsedown::instance()->parse( $this->github_api_result->body ) : $this->github_api_result->body,
-		);
-
-		// Get the required version of WP if available.
-		$matches = null;
-		preg_match( '/requires:\s([\d\.]+)/i', $this->github_api_result->body, $matches );
-		if ( ! empty( $matches ) ) {
-			if ( is_array( $matches ) ) {
-				if ( count( $matches ) > 1 ) {
-					$response->requires = $matches[ 1 ];
-				}
-			}
-		}
-
-		// Get the tested version of WP if available.
-		$matches = null;
-		preg_match( '/tested:\s([\d\.]+)/i', $this->github_api_result->body, $matches );
-		if ( ! empty( $matches ) ) {
-			if ( is_array( $matches ) ) {
-				if ( count( $matches ) > 1 ) {
-					$response->tested = $matches[ 1 ];
-				}
-			}
-		}
-
-		return $response;
+	public function pre_install( $true, $args ) {
+		$this->plugin_active = is_plugin_active( $this->plugin );
 	}
 
-	/**
-	 * Perform check before installation starts.
-	 *
-	 * @param  boolean $true
-	 * @param  array   $args
-	 * @return null
-	 */
-	public function pu_pre_install( $true, $args ) {
-		$this->pu_init_plugin_data();
-		$this->plugin_activated = is_plugin_active( $this->slug );
-	}
-
-	/**
-	 * Perform additional actions to successfully install our plugin.
-	 *
-	 * @param  boolean $true
-	 * @param  string  $hook_extra
-	 * @param  object  $result
-	 * @return object
-	 */
-	public function pu_post_install( $true, $hook_extra, $result ) {
+	public function post_install( $true, $hook_extra, $result ) {
 		global $wp_filesystem;
 
-		$plugin_folder = plugin_dir_path( __DIR__ );
-		$wp_filesystem->move( $result[ 'destination' ], $plugin_folder );
-		$result[ 'destination' ] = $plugin_folder;
+		$plugin_path = substr( $this->plugin_file, 0, strrpos( $this->plugin_file, '/' ) - 1 );
+		$wp_filesystem->move( $result[ 'destination' ], $plugin_path );
+		$result[ 'destination' ] = $plugin_path;
 
-		if ( $this->plugin_activated ) {
-			$activate = activate_plugin( $this->slug );
+		//TODO: parse .gitmodules file and grab the contents of included repos
+		/*
+		$modules = parse_ini_file( wp_file_get_contents( $plugin_path . '.gitmodules' ) );
+		foreach ( $modules as $module ) {
+			$github_response = $this->github_api_fetch( $module[ 'github_user' ], $module[ 'github_repo' ], $module[ 'access_token' ] );
+
+			$zipball = wp_remote_get( $github_response->zipball_url );
+
+			$wp_filesystem->unzip_file( $zipball, $plugin_path . 'includes/' . $module[ 'github_repo' ] . '/' );
 		}
+		*/
+
+		if ( $this->plugin_active ) {
+			$activate = activate_plugin( $this->plugin );
+		}
+
+		update_option( $this->github_repo . '_Pallazzio_WordPress_GitHub_Updater', '' );
 
 		return $result;
 	}
+
 }
+
+endif;
