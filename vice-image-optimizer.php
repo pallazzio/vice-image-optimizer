@@ -4,7 +4,7 @@
  * Plugin Name:       Vice Image Optimizer
  * Plugin URI:        https://www.pallazzio.net/vice-image-optimizer/
  * Description:       Compress Images using Google PageSpeed Insights Image Optimizer
- * Version:           1.0.1
+ * Version:           1.0.2
  * Author:            Jeremy Kozan
  * Author URI:        https://www.pallazzio.net/
  * License:           MIT
@@ -25,11 +25,11 @@ class Vice_Image_Optimizer {
 		$this->plugin_path = plugin_dir_path( __FILE__ );
 		add_action( 'admin_menu', array( $this, 'init_settings' ), 99 );
 
-		require_once $this->plugin_path . 'includes/updater.php';
+		require_once $this->plugin_path . 'includes/pallazzio-wordpress-github-updater/pallazzio-wordpress-github-updater.php';
 		new Pallazzio_WordPress_GitHub_Updater( __FILE__, 'pallazzio' );
 
-		require_once $this->plugin_path . 'includes/settings-framework.php';
-		$this->psf = new Pallazzio_Settings_Framework( $this->plugin_path . 'includes/settings.php', 'vio_settings' );
+		require_once $this->plugin_path . 'includes/pallazzio-wordpress-settings-framework/pallazzio-wordpress-settings-framework.php';
+		$this->psf = new Pallazzio_WordPress_Settings_Framework( $this->plugin_path . 'includes/settings.php', 'vio_settings' );
 
 		add_filter( $this->psf->get_option_group() . '_settings_validate', array( &$this, 'validate_settings' ) );
 

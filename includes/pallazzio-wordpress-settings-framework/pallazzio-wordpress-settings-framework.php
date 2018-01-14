@@ -28,11 +28,11 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-if ( ! class_exists( 'Pallazzio_Settings_Framework' ) ) {
+if ( ! class_exists( 'Pallazzio_WordPress_Settings_Framework' ) ) {
 	/**
-	 * Pallazzio_Settings_Framework class
+	 * Pallazzio_WordPress_Settings_Framework class
 	 */
-	class Pallazzio_Settings_Framework {
+	class Pallazzio_WordPress_Settings_Framework {
 
 		/**
 		 * @access private
