@@ -1,0 +1,3 @@
+[submodule "includes/pallazzio-wordpress-github-updater"]
+	path = includes/pallazzio-wordpress-github-updater
+	url = https://github.com/pallazzio/pallazzio-wordpress-github-updater
