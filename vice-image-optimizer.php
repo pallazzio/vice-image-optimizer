@@ -4,7 +4,7 @@
  * Plugin Name:       Vice Image Optimizer
  * Plugin URI:        https://www.pallazzio.net/vice-image-optimizer/
  * Description:       Compress Images using Google PageSpeed Insights Image Optimizer
- * Version:           1.0.5
+ * Version:           1.0.6
  * Author:            Jeremy Kozan
  * Author URI:        https://www.pallazzio.net/
  * License:           MIT
@@ -13,7 +13,7 @@
  * Domain Path:       /languages
  */
 
-// If this file is called directly, abort.
+// if this file is called directly, abort
 if ( ! defined( 'WPINC' ) ) die;
 
 $vio = new Vice_Image_Optimizer();
@@ -26,11 +26,10 @@ class Vice_Image_Optimizer {
 		add_action( 'admin_menu', array( $this, 'init_settings' ), 99 );
 
 		require_once $this->plugin_path . 'includes/pallazzio-wordpress-github-updater/pallazzio-wordpress-github-updater.php';
-		new Pallazzio_WordPress_GitHub_Updater( __FILE__, 'pallazzio' );
+		new Pallazzio_WordPress_GitHub_Updater( $this->plugin_path . wp_basename( __FILE__ ), 'pallazzio' );
 
 		require_once $this->plugin_path . 'includes/pallazzio-wordpress-settings-framework/pallazzio-wordpress-settings-framework.php';
 		$this->psf = new Pallazzio_WordPress_Settings_Framework( $this->plugin_path . 'includes/settings.php', 'vio_settings' );
-
 		add_filter( $this->psf->get_option_group() . '_settings_validate', array( &$this, 'validate_settings' ) );
 
 		register_activation_hook( __FILE__,   array( $this, 'vio_install' ) );
@@ -45,7 +44,7 @@ class Vice_Image_Optimizer {
 	}
 
 	/**
-	 * Add settings page.
+	 * Adds settings page.
 	 *
 	 * @return null
 	 */
@@ -58,7 +57,7 @@ class Vice_Image_Optimizer {
 	}
 
 	/**
-	 * Do settings validation.
+	 * Does settings validation.
 	 * Same as $sanitize_callback from http://codex.wordpress.org/Function_Reference/register_setting
 	 *
 	 * @param  mixed $input
@@ -70,7 +69,7 @@ class Vice_Image_Optimizer {
 	}
 
 	/**
-	 * Set up stuff when plugin is activated.
+	 * Sets up stuff when plugin is activated.
 	 *
 	 * @return null
 	 */
@@ -135,7 +134,7 @@ class Vice_Image_Optimizer {
 	}
 
 	/**
-	 * Display various notices/warnings/errors in WordPress admin area.
+	 * Displays various notices/warnings/errors in the WordPress admin area.
 	 *
 	 * @return null
 	 */
@@ -178,7 +177,7 @@ class Vice_Image_Optimizer {
 	}
 
 	/**
-	 * Init plugin.
+	 * Initializes plugin.
 	 *
 	 * @return null
 	 */
@@ -206,7 +205,7 @@ class Vice_Image_Optimizer {
 	}
 
 	/**
-	 * Add 'Settings' link to the 'Plugins' page.
+	 * Adds 'Settings' link to the 'Plugins' page.
 	 *
 	 * @param  array $links
 	 * @return array
@@ -214,11 +213,12 @@ class Vice_Image_Optimizer {
 	function vio_add_settings_link( $links ) {
 		$settings_link = '<a href="upload.php?page=vio-settings">' . __( 'Settings', 'vio' ) . '</a>';
 		array_unshift( $links, $settings_link );
+
 		return $links;
 	}
 
 	/**
-	 * Add newly uploaded images to the list of images to optimize.
+	 * Adds newly uploaded images to the list of images to optimize.
 	 *
 	 * @param  int $attachment_id
 	 * @return int
@@ -238,11 +238,12 @@ class Vice_Image_Optimizer {
 			),
 			'option'
 		);
+
 		return $attachment_id;
 	}
 
 	/**
-	 * Remove deleted images from the lists 'to_optimize' and 'optimized'.
+	 * Removes deleted images from the lists 'to_optimize' and 'optimized'.
 	 *
 	 * @param  int $attachment_id
 	 * @return null
@@ -277,7 +278,7 @@ class Vice_Image_Optimizer {
 	}
 
 	/**
-	 * Convert images with extension '.jpeg' to '.jpg'.
+	 * Converts images with extension '.jpeg' to '.jpg'.
 	 *
 	 * @param  array $image_data
 	 * @return array
@@ -329,7 +330,7 @@ class Vice_Image_Optimizer {
 	}
 
 	/**
-	 * For newly uploaded images, delete large original image and use a smaller version in its place.
+	 * For newly uploaded images, deletes large original image and uses a smaller version in its place.
 	 *
 	 * @param  array $image_data
 	 * @return array
@@ -360,7 +361,7 @@ class Vice_Image_Optimizer {
 	}
 
 	/**
-	 * Get an attachment, resize and discard overly large images, send all image sizes to Google for optimization.
+	 * Gets an attachment, resizes and discards overly large images, and sends all image sizes to Google for optimization.
 	 *
 	 * @return null
 	 */
@@ -473,7 +474,7 @@ class Vice_Image_Optimizer {
 	}
 
 	/**
-	 * Convert HTTP Response headers to a more readable format.
+	 * Converts HTTP Response headers to a more readable format.
 	 *
 	 * @param  array/object $headers
 	 * @return array
@@ -488,16 +489,18 @@ class Vice_Image_Optimizer {
 				$head[ trim( $t[ 0 ] ) ] = trim( $t[ 1 ] );
 			} else {
 				$head[] = $v;
-				if ( preg_match( '#HTTP/[0-9\.]+\s+([0-9]+)#', $v, $out ) ) {
-					$head[ 'reponse_code' ] = intval( $out[ 1 ] );
+				$matches = array();
+				if ( preg_match( '#HTTP/[0-9\.]+\s+([0-9]+)#', $v, $matches ) ) {
+					$head[ 'reponse_code' ] = intval( $matches[ 1 ] );
 				}
 			}
 		}
+
 		return $head;
 	}
 
 	/**
-	 * Clear wp_cron job upon plugin deactivation.
+	 * Clears wp_cron() job upon plugin deactivation.
 	 *
 	 * @return null
 	 */
@@ -506,7 +509,7 @@ class Vice_Image_Optimizer {
 	}
 
 	/**
-	 * Add wp_cron job.
+	 * Adds wp_cron() job.
 	 *
 	 * @param  array $schedules
 	 * @return array
@@ -516,11 +519,12 @@ class Vice_Image_Optimizer {
 			'interval' => 360,
 			'display'  => __( 'Once Every Six Minutes', 'vio' ),
 		);
+
 		return $schedules;
 	}
 
 	/**
-	 * Write to error_log.
+	 * Writes to error_log.
 	 *
 	 * @return null
 	 */
