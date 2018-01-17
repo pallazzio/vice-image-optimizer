@@ -4,7 +4,7 @@
  * Plugin Name:       Vice Image Optimizer
  * Plugin URI:        https://www.pallazzio.net/vice-image-optimizer/
  * Description:       Compress Images using Google PageSpeed Insights Image Optimizer
- * Version:           1.0.6
+ * Version:           1.0.7
  * Author:            Jeremy Kozan
  * Author URI:        https://www.pallazzio.net/
  * License:           MIT
